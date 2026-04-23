@@ -1,5 +1,3 @@
-import logging
-import os
 import scipy.signal
 import numpy as np
 import xarray as xr

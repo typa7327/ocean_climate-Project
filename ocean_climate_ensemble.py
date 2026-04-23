@@ -4,7 +4,7 @@
 # from .analysis.lag import lag_correlation
 # from .analysis.composites import composite_by_phase
 import matplotlib.pyplot as plt
-from .data.loader import open_cesm2le
+from loader import _get_dataset
 
 
 def main():
@@ -20,21 +20,21 @@ def main():
     """
 
 # Open lazily — no data downloaded yet
-da = open_cesm2le(
+da = _get_dataset(
     "TEMP",
     component="ocn",
     scenario="historical",
     forcing="cmip6",
-    time_slice=("1990-01", "2000-12"),
-    lat=slice(37.0, 41.0),      # Colorado-ish
-    lon=slice(-109.0, -102.0),  # negative °W values; converted to 0–360 internally
+    time_slice=("1999-01", "2000-12"),
+    lat=slice(5, 5),      # Pacific ENSO
+    lon=slice(-170.0, -120.0),  # negative °W values; converted to 0–360 internally
     members=0,                  # first ensemble member only
 )
 
 da = da.load()
 
 # Spatial mean → time series, convert K → °C
-ts = da.mean(["lat", "lon"]) - 273.15
+ts = da.mean(["nlat", "nlon"]) - 273.15
 
 
 # --------------------------------------------
