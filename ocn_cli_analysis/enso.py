@@ -1,5 +1,5 @@
 import xarray as xr
-from data.loader import subset_region #(ds, lat_bounds, lon_bounds)
+from loader import subset_region #(ds, lat_bounds, lon_bounds)
 
 def compute_nino(sst):
     region = sst.sel(lat=slice(5, -5), lon=slice(190, 240))

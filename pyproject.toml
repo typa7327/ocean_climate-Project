@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ocean-climate"
-version = "0.2.0"
+version = "0.3.0"
 description = "Climate patterns vs ocean profiles analysis and plotting"
 readme = "README.md"
 license = {text = "MIT"}
