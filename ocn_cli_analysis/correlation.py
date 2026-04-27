@@ -8,11 +8,13 @@ _DEPTH_DIMS   = ("z_t", "z_w", "depth", "lev")
 
 
 def _prep_field(field: xr.DataArray) -> xr.DataArray:
-    """Reduce to (time, nlat, nlon) or (time, lat, lon).
+    """
+    Reduce to (time, nlat, nlon) or (time, lat, lon).
 
     Averages depth dims (z_t, z_w, depth, lev) and squeezes any remaining
     size-1 dims (e.g. member_id) so xr.corr always produces a clean 2-D map.
     """
+
     depth_dims = [d for d in field.dims if d in _DEPTH_DIMS]
     if depth_dims:
         field = field.mean(depth_dims)
@@ -22,7 +24,10 @@ def _prep_field(field: xr.DataArray) -> xr.DataArray:
 
 
 def _prep_index(index: xr.DataArray) -> xr.DataArray:
-    """Ensure index is strictly 1-D over time."""
+    """
+    Ensure index is strictly 1-D over time.
+    """
+
     extra = [d for d in index.dims if d != "time"]
     if extra:
         index = index.mean(extra)
@@ -30,28 +35,21 @@ def _prep_index(index: xr.DataArray) -> xr.DataArray:
 
 
 def correlation_map(field: xr.DataArray, index: xr.DataArray) -> xr.DataArray:
-    """Pointwise Pearson correlation between a spatial field and a 1-D index.
+    """
+    Pointwise Pearson correlation between a spatial field and a 1-D index.
 
     Depth dimensions (z_t, z_w, depth, lev) are averaged out automatically
     so the output is always 2-D (nlat × nlon or lat × lon).
-
-    Parameters
-    ----------
-    field : xr.DataArray
-        Shape (time, [z_t,] nlat, nlon). Anomalies recommended.
-    index : xr.DataArray
-        1-D (time,) ENSO index.
-
-    Returns
-    -------
-    xr.DataArray
-        2-D correlation map.
     """
+
     return xr.corr(_prep_field(field), _prep_index(index), dim="time").rename("correlation")
 
 
 def regression_map(field: xr.DataArray, index: xr.DataArray) -> xr.DataArray:
-    """Pointwise linear regression slope."""
+    """
+    Pointwise linear regression slope.
+    """
+
     field = _prep_field(field)
     index = _prep_index(index)
     cov = xr.cov(field, index, dim="time")
@@ -59,19 +57,14 @@ def regression_map(field: xr.DataArray, index: xr.DataArray) -> xr.DataArray:
     return (cov / var).rename("regression")
 
 
-def significance_mask(
-    field: xr.DataArray,
-    index: xr.DataArray,
-    alpha: float = 0.05,
-) -> xr.DataArray:
-    """Boolean mask: True where the correlation is statistically significant.
-
-    Uses a two-tailed t-test with n-2 degrees of freedom.
-
-    Returns
-    -------
-    xr.DataArray of bool, same 2-D spatial shape as the correlation map.
+def significance_mask(field: xr.DataArray,
+                      index: xr.DataArray,
+                      alpha: float = 0.05,) -> xr.DataArray:
     """
+    Boolean mask: True where the correlation is statistically significant.
+    Uses a two-tailed t-test with n-2 degrees of freedom.
+    """
+    
     field = _prep_field(field)
     index = _prep_index(index)
     corr = xr.corr(field, index, dim="time").rename("correlation")

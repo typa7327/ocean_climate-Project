@@ -28,7 +28,7 @@ import argparse
 import numpy as np
 import xarray as xr
 
-from loader import _get_dataset, compute_anomaly, detrend, standardize
+from loader import _get_dataset, compute_anomaly
 from enso import compute_nino34, compute_oni, classify_enso
 from lag import lag_correlation
 from correlation import correlation_map, significance_mask
@@ -36,10 +36,9 @@ from composite import composite_by_phase, composite_difference
 import timeseries
 
 
-def load_enso_box(members, *, component, scenario, forcing,
-                  time_slice, lat_box, lon_box):
+def load_enso_box(members, *, component, scenario, forcing,time_slice, lat_box, lon_box):
     """Load TEMP over the specified box for given member(s)."""
-    print(f"Loading TEMP — members={members} …")
+    print("Loading TEMP")
     da = _get_dataset(
         "TEMP",
         component=component,
@@ -51,47 +50,37 @@ def load_enso_box(members, *, component, scenario, forcing,
         members=members,
     )
     da = da.load()
-    print(f"  → loaded shape: {da.dims} = {dict(da.sizes)}")
     return da
 
 
 def spatial_mean_ts(da: xr.DataArray) -> xr.DataArray:
-    """Average over all spatial dims → pure time (× member_id) series."""
-    spatial = [d for d in da.dims if d in ("nlat", "nlon", "lat", "lon")]
-    return da.mean(dim=spatial)
+    """Average over all spatial and depth dims → pure (time,) series."""
+    reduce = [d for d in da.dims
+              if d in ("nlat", "nlon", "lat", "lon", "z_t", "z_w", "depth", "lev")]
+    return da.mean(dim=reduce)
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="CESM2-LE Ocean Temperature × ENSO analysis"
-    )
-    parser.add_argument("--component",  type=str, required=True,
-                        choices=["atm", "ocn"])
-    parser.add_argument("--scenario",   type=str, required=True,
-                        choices=["historical", "ssp370"])
-    parser.add_argument("--forcing",    type=str, required=True,
-                        choices=["cmip6", "smbb"])
-    parser.add_argument("--time-slice", type=str, nargs=2, required=True,
-                        metavar=("START", "END"),
-                        help="e.g. 1990-01 2014-12")
-    parser.add_argument("--lat-box",    type=float, nargs=2, required=True,
-                        metavar=("NORTH", "SOUTH"),
-                        help="e.g. 5 -5  (north first)")
-    parser.add_argument("--lon-box",    type=float, nargs=2, required=True,
-                        metavar=("WEST", "EAST"),
-                        help="e.g. -155 -120  (negative °W accepted)")
+    parser = argparse.ArgumentParser(description="CESM2-LE Ocean Temperature × ENSO analysis")
+    
+    parser.add_argument("--component",  type=str, required=True,choices=["atm", "ocn"])
+    parser.add_argument("--scenario",   type=str, required=True,choices=["historical", "ssp370"])
+    parser.add_argument("--forcing",    type=str, required=True,choices=["cmip6", "smbb"])
+    parser.add_argument("--time-slice", type=str, nargs=2, required=True,metavar=("START", "END"),help="e.g. 1990-01 2014-12")
+    parser.add_argument("--lat-box",    type=float, nargs=2, required=True,metavar=("NORTH", "SOUTH"),help="e.g. 5 -5  (north first)")
+    parser.add_argument("--lon-box",    type=float, nargs=2, required=True,metavar=("WEST", "EAST"),help="e.g. -155 -120  (negative °W accepted)")
 
     args = parser.parse_args()
 
     # Unpack CLI args into local config
     COMPONENT  = args.component
-    SCENARIO   = args.scenario          # already .lower()'d by argparse type=
+    SCENARIO   = args.scenario
     FORCING    = args.forcing
     TIME_SLICE = tuple(args.time_slice)
     LAT_BOX    = tuple(args.lat_box)
     LON_BOX    = tuple(args.lon_box)
-    LAGS       = list(range(-12, 13))   # months; positive = ONI leads TEMP
-    ALPHA      = 0.05                   # significance level for correlation maps
+    LAGS       = list(range(-12, 13))   
+    ALPHA      = 0.05                  
 
     # -----------------------------------------------------------------------
     # 1. Load data — member 0 only
@@ -104,53 +93,40 @@ def main():
         time_slice=TIME_SLICE,
         lat_box=LAT_BOX,
         lon_box=LON_BOX,
-    )  # (time, nlat, nlon)
+    )  
 
     # -----------------------------------------------------------------------
     # 2. Niño-3.4 index and ONI
     # -----------------------------------------------------------------------
     print("\nComputing Niño-3.4 index …")
 
-    nino34_m0 = compute_nino34(da_m0)   # (time,)
-    oni_m0    = compute_oni(nino34_m0)  # (time,) — has NaN at edges from rolling
+    nino34_m0 = compute_nino34(da_m0)   
+    oni_m0    = compute_oni(nino34_m0) 
 
-    # Drop the NaN-padded edge time steps from the ONI rolling mean so that
-    # phase labels and field arrays share the exact same positional indices.
-    # Squeeze first so oni_m0 is strictly 1-D (time,) before extracting values.
     oni_1d     = oni_m0.squeeze()
     valid_time = np.where(~np.isnan(oni_1d.values))[0]
     oni_m0    = oni_1d.isel(time=valid_time)
-    da_valid  = da_m0.isel(time=valid_time)   # field trimmed to same window
-
     phase_m0  = classify_enso(oni_m0)
 
     # -----------------------------------------------------------------------
     # 3. Temperature anomaly fields for correlation / composite
     # -----------------------------------------------------------------------
     print("Computing temperature anomalies …")
-    # Compute anomaly on the full da_m0 then trim to the valid window
+   
     anom_full = da_m0.groupby("time.month") - da_m0.groupby("time.month").mean("time")
     anom_full = anom_full.assign_coords(time=da_m0.time)
-    anom_m0   = anom_full.isel(time=valid_time)   # (time, z_t, nlat, nlon)
+    anom_m0   = anom_full.isel(time=valid_time)   
 
-    # Spatially averaged anomaly time series (for lag plot)
     ts_m0 = spatial_mean_ts(anom_m0)
 
     # -----------------------------------------------------------------------
-    # 4. Time series: ONI and TEMP anomaly
+    # 4. Time series: raw Niño-3.4 vs smoothed ONI (one combined plot)
     # -----------------------------------------------------------------------
     print("\nPlotting time series …")
-    timeseries.plot_timeseries(
+    timeseries.plot_nino34_vs_oni(
+        nino34_m0,
         oni_m0,
-        title="ONI — Member 0",
-        xlabel="Time",
-        ylabel="ONI (°C)",
-    )
-    timeseries.plot_timeseries(
-        ts_m0,
-        title="ENSO-box TEMP Anomaly — Member 0",
-        xlabel="Time",
-        ylabel="TEMP Anomaly (°C)",
+        title="Niño-3.4 vs ONI",
     )
 
     # -----------------------------------------------------------------------
@@ -173,10 +149,25 @@ def main():
     corr_map_m0 = correlation_map(anom_m0, oni_m0)
     sig_map_m0  = significance_mask(anom_m0, oni_m0, alpha=ALPHA)
 
+    if "TLAT" in da_m0.coords and "TLONG" in da_m0.coords:
+        tlat  = da_m0["TLAT"]
+        tlong = da_m0["TLONG"]
+        for d in ("member_id", "z_t", "z_w", "depth", "lev"):
+            if d in tlat.dims:
+                tlat  = tlat.isel({d: 0}, drop=True)
+                tlong = tlong.isel({d: 0}, drop=True)
+        corr_map_m0 = corr_map_m0.assign_coords(TLAT=tlat, TLONG=tlong)
+        if sig_map_m0 is not None:
+            sig_map_m0 = sig_map_m0.assign_coords(TLAT=tlat, TLONG=tlong)
+    else:
+        print("  [warning] TLAT/TLONG not found on da_m0 — map will use index coords")
+
     timeseries.plot_correlation_map(
         corr_map_m0,
         sig_mask=sig_map_m0,
-        title="TEMP–ONI Correlation Map — Member 0",
+        title="TEMP–ONI Correlation Map",
+        lat_bounds=(min(LAT_BOX), max(LAT_BOX)),
+        lon_bounds=(min(LON_BOX), max(LON_BOX)),
     )
 
     # -----------------------------------------------------------------------
@@ -192,7 +183,7 @@ def main():
     if en_m0 is not None and ln_m0 is not None and diff_m0 is not None:
         timeseries.plot_composite_map(
             en_m0, ln_m0, diff_m0,
-            title_prefix="TEMP Composite (Member 0)",
+            title_prefix="TEMP Composite",
         )
     else:
         print("  Skipping composite map — one or more phases absent from time slice")
@@ -209,16 +200,7 @@ def main():
     max_lag = int(lagcorr_m0["lag"].isel(lag=int(lagcorr_m0.argmax("lag"))).values)
     print(f"Peak lag    : {max_lag} months")
 
-    return {
-        "nino34_m0": nino34_m0,
-        "oni_m0": oni_m0,
-        "phase_m0": phase_m0,
-        "corr_map_m0": corr_map_m0,
-        "sig_map_m0": sig_map_m0,
-        "lagcorr_m0": lagcorr_m0,
-        "comp_m0": comp_m0,
-        "diff_m0": diff_m0,
-    }
+
 
 
 if __name__ == "__main__":

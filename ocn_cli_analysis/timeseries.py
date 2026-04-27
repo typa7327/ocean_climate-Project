@@ -3,14 +3,14 @@ import xarray as xr
 import numpy as np
 
 
-def plot_timeseries(
-    ts,
-    title: str = None,
-    xlabel: str = None,
-    ylabel: str = None,
-    save: bool = True,
-) -> None:
-    """Plot a single time series (DataArray or Dataset)."""
+def plot_timeseries(ts,
+                    title: str = None,
+                    xlabel: str = None,
+                    ylabel: str = None,
+                    save: bool = True,) -> None:
+    """
+    Plot a single time series (DataArray or Dataset).
+    """
     fig, ax = plt.subplots(figsize=(10, 4))
     if isinstance(ts, xr.Dataset):
         for var in ts.data_vars:
@@ -33,21 +33,13 @@ def plot_timeseries(
     plt.close()
 
 
-def plot_member_vs_ensemble(
-    member_ts: xr.DataArray,
-    ensemble_ts: xr.DataArray,
-    title: str = "Member 0 vs Ensemble Mean",
-    ylabel: str = "Temperature (°C)",
-    save: bool = True,
-) -> None:
-    """Overlay a single ensemble member against the ensemble mean.
-
-    Parameters
-    ----------
-    member_ts : xr.DataArray
-        Time series for one member (1-D over ``time``).
-    ensemble_ts : xr.DataArray
-        Ensemble mean time series (1-D over ``time``).
+def plot_member_vs_ensemble(member_ts: xr.DataArray,
+                            ensemble_ts: xr.DataArray,
+                            title: str = "Member 0 vs Ensemble Mean",
+                            ylabel: str = "Temperature (°C)",
+                            save: bool = True,) -> None:
+    """
+    Overlay a single ensemble member against the ensemble mean.
     """
     fig, ax = plt.subplots(figsize=(12, 4))
     member_ts.plot(ax=ax, color="steelblue", alpha=0.8, label="Member 0")
@@ -65,21 +57,41 @@ def plot_member_vs_ensemble(
     plt.close()
 
 
-def plot_lag_correlation(
-    lag_corr: xr.DataArray,
-    title: str = "Lag Correlation: TEMP vs ONI",
-    member_label: str = "Member 0",
-    ensemble_lag_corr: xr.DataArray = None,
-    save: bool = True,
-) -> None:
-    """Bar/line plot of lag-correlation coefficients.
 
-    Parameters
-    ----------
-    lag_corr : xr.DataArray
-        Lag-correlation for member 0, indexed by ``lag``.
-    ensemble_lag_corr : xr.DataArray, optional
-        Same but for the ensemble mean.
+def plot_nino34_vs_oni(nino34: xr.DataArray,
+                       oni: xr.DataArray,
+                       title: str = "Niño-3.4 vs ONI",
+                       save: bool = True,) -> None:
+    """
+    Overlay Niño-3.4 index and 3-month smoothed ONI on the same axes.
+    """
+    fig, ax = plt.subplots(figsize=(12, 4))
+    nino34.squeeze().plot(ax=ax, color="steelblue", alpha=0.5,
+                          linewidth=1.0, label="Niño-3.4 (raw)")
+    oni.squeeze().plot(ax=ax, color="firebrick", linewidth=2.0,
+                       label="ONI (3-month mean)")
+    ax.axhline(0.5,  color="firebrick", linewidth=0.8, linestyle="--", alpha=0.6)
+    ax.axhline(-0.5, color="steelblue", linewidth=0.8, linestyle="--", alpha=0.6)
+    ax.axhline(0,    color="k",         linewidth=0.6)
+    ax.set_title(title)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Temperature Anomaly (°C)")
+    ax.legend()
+    plt.tight_layout()
+    if save:
+        fname = title.replace(" ", "_").replace("/", "-") + ".png"
+        plt.savefig(fname, dpi=150)
+        print(f"Saved {fname}")
+    plt.show()
+    plt.close()
+
+def plot_lag_correlation(lag_corr: xr.DataArray,
+                         title: str = "Lag Correlation: TEMP vs ONI",
+                         member_label: str = "Member 0",
+                         ensemble_lag_corr: xr.DataArray = None,
+                         save: bool = True,) -> None:
+    """
+    Bar/line plot of lag-correlation coefficients.
     """
     lags = lag_corr["lag"].values.astype(float)
     vals = lag_corr.squeeze().values.astype(float)
@@ -103,55 +115,61 @@ def plot_lag_correlation(
     plt.close()
 
 
-def plot_correlation_map(
-    corr: xr.DataArray,
-    sig_mask: xr.DataArray = None,
-    title: str = "Correlation Map",
-    cmap: str = "RdBu_r",
-    save: bool = True,
-) -> None:
-    """Pcolormesh correlation map on the POP curvilinear grid.
-
-    Uses TLAT/TLONG if present, otherwise falls back to nlat/nlon indices.
-    Stippling marks statistically significant grid cells.
-
-    Parameters
-    ----------
-    corr : xr.DataArray
-        2-D correlation map (nlat × nlon).
-    sig_mask : xr.DataArray, optional
-        Boolean mask (True = significant). Stippled on the plot.
+def plot_correlation_map(corr: xr.DataArray,
+                         sig_mask: xr.DataArray = None,
+                         title: str = "Correlation Map",
+                         cmap: str = "RdBu_r",
+                         lat_bounds: tuple = (-5, 5),
+                         lon_bounds: tuple = (-155, -120),
+                         save: bool = True,) -> None:
     """
-    fig, ax = plt.subplots(figsize=(10, 5))
+    Correlation map with Cartopy PlateCarree projection and coastlines.
 
-    # Try to use geographic coordinates if attached
+    Uses TLAT/TLONG coordinates when present (POP curvilinear grid).
+    Falls back to integer grid indices if geographic coords are unavailable.
+    """
+    import cartopy.crs as ccrs
+    import cartopy.feature as cfeature
+
+    proj = ccrs.PlateCarree()
+    fig, ax = plt.subplots(figsize=(12, 5),
+                           subplot_kw={"projection": proj})
+
     if "TLAT" in corr.coords and "TLONG" in corr.coords:
         lats = corr["TLAT"].values
         lons = corr["TLONG"].values
-        vals = corr.values
-        pcm = ax.pcolormesh(lons, lats, vals, cmap=cmap, vmin=-1, vmax=1,
-                            shading="auto")
-        ax.set_xlabel("Longitude (°E)")
-        ax.set_ylabel("Latitude (°N)")
-        if sig_mask is not None:
-            sig = sig_mask.values
-            # Stipple significant points
-            ax.contourf(lons, lats, sig.astype(float), levels=[0.5, 1.5],
-                        hatches=["..."], colors="none")
-    else:
-        # No geographic coords — build explicit integer index grids for axes
-        import numpy as np
-        vals = corr.squeeze().values          # ensure 2-D (nlat, nlon)
-        nrows, ncols = vals.shape
-        X, Y = np.meshgrid(np.arange(ncols), np.arange(nrows))
-        pcm = ax.pcolormesh(X, Y, vals, cmap=cmap, vmin=-1, vmax=1, shading="auto")
-        ax.set_xlabel("nlon index")
-        ax.set_ylabel("nlat index")
+        vals = corr.squeeze().values
+        # PlateCarree handles 0–360 natively via central_longitude=0;
+        # pass lons as-is and let set_extent define the visible window.
+        pcm = ax.pcolormesh(lons, lats, vals,
+                            cmap=cmap, vmin=-1, vmax=1,
+                            shading="auto", transform=proj)
         if sig_mask is not None:
             sig = sig_mask.squeeze().values.astype(float)
-            ax.contourf(X, Y, sig, levels=[0.5, 1.5], hatches=["..."], colors="none")
+            ax.contourf(lons, lats, sig, levels=[0.5, 1.5],
+                        hatches=["..."], colors="none", transform=proj)
+    else:
+        vals = corr.squeeze().values
+        nrows, ncols = vals.shape
+        X, Y = np.meshgrid(np.arange(ncols), np.arange(nrows))
+        pcm = ax.pcolormesh(X, Y, vals, cmap=cmap, vmin=-1, vmax=1,
+                            shading="auto", transform=proj)
+        if sig_mask is not None:
+            sig = sig_mask.squeeze().values.astype(float)
+            ax.contourf(X, Y, sig, levels=[0.5, 1.5],
+                        hatches=["..."], colors="none", transform=proj)
 
-    plt.colorbar(pcm, ax=ax, label="Pearson r", shrink=0.8)
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
+    ax.add_feature(cfeature.LAND, facecolor="lightgray", zorder=1)
+    # Convert lon bounds to 0–360 to match POP grid, then set extent
+    lon_w = lon_bounds[0] + 360 if lon_bounds[0] < 0 else lon_bounds[0]
+    lon_e = lon_bounds[1] + 360 if lon_bounds[1] < 0 else lon_bounds[1]
+    ax.set_extent([lon_w, lon_e, lat_bounds[0], lat_bounds[1]], crs=proj)
+    gl = ax.gridlines(draw_labels=True, linewidth=0.4,
+                      color="gray", alpha=0.5, linestyle="--")
+    gl.top_labels = False
+    gl.right_labels = False
+    plt.colorbar(pcm, ax=ax, label="Pearson r", shrink=0.7, pad=0.02)
     ax.set_title(title)
     plt.tight_layout()
     if save:
@@ -162,26 +180,15 @@ def plot_correlation_map(
     plt.close()
 
 
-def plot_composite_map(
-    comp_en: xr.DataArray,
-    comp_ln: xr.DataArray,
-    diff: xr.DataArray,
-    title_prefix: str = "TEMP Composite",
-    cmap: str = "RdBu_r",
-    save: bool = True,
-) -> None:
-    """Three-panel composite map: El Niño | La Niña | Difference.
-
-    Parameters
-    ----------
-    comp_en : xr.DataArray
-        El Niño composite (2-D spatial).
-    comp_ln : xr.DataArray
-        La Niña composite.
-    diff : xr.DataArray
-        El Niño − La Niña.
+def plot_composite_map(comp_en: xr.DataArray,
+                       comp_ln: xr.DataArray,
+                       diff: xr.DataArray,
+                       title_prefix: str = "TEMP Composite",
+                       cmap: str = "RdBu_r",
+                       save: bool = True,) -> None:
     """
-    import numpy as np
+    Three-panel composite map: El Niño | La Niña | Difference.
+    """
 
     def _to_2d(da):
         """Squeeze member_id + average z_t → 2-D (nlat, nlon)."""
@@ -228,12 +235,12 @@ def plot_composite_map(
     plt.close()
 
 
-def plot_multiple_timeseries(ds, vars):
-    """Quick multi-variable overlay plot from a Dataset."""
-    fig, ax = plt.subplots(figsize=(10, 4))
-    for v in vars:
-        ds[v].plot(ax=ax, label=v)
-    ax.legend()
-    plt.tight_layout()
-    plt.show()
-    plt.close()
+# def plot_multiple_timeseries(ds, vars):
+#     """Quick multi-variable overlay plot from a Dataset."""
+#     fig, ax = plt.subplots(figsize=(10, 4))
+#     for v in vars:
+#         ds[v].plot(ax=ax, label=v)
+#     ax.legend()
+#     plt.tight_layout()
+#     plt.show()
+#     plt.close()

@@ -16,15 +16,15 @@ def _zarr_url(component: str, scenario: str, forcing: str, variable: str) -> str
 
 # ds = _get_dataset()
 def _get_dataset(variable: str,
-    component: str = "atm",
-    scenario: str = "historical",
-    forcing: str = "cmip6",
-    time_slice: tuple | None = None,
-    lat: float | tuple | None = None,
-    lon: float | tuple | None = None,
-    members: int | list[int] | None = None,
-) -> xr.DataArray:
-    """Open a CESM2 Large Ensemble variable from the NCAR AWS S3 archive.
+                 component: str = "atm",
+                 scenario: str = "historical",
+                 forcing: str = "cmip6",
+                 time_slice: tuple | None = None,
+                 lat: float | tuple | None = None,
+                 lon: float | tuple | None = None,
+                 members: int | list[int] | None = None,) -> xr.DataArray:
+    """
+    Open a CESM2 Large Ensemble variable from the NCAR AWS S3 archive.
 
     Data are loaded lazily — nothing is downloaded until you call .compute(),
     .load(), or pass the result to a plotting or analysis function.
@@ -258,10 +258,13 @@ def _sel_ocn(da: xr.DataArray, ds: xr.Dataset, lat, lon) -> xr.DataArray:
         rows = np.where(mask.any(dim="nlon").values)[0]
         cols = np.where(mask.any(dim="nlat").values)[0]
         if rows.size and cols.size:
-            da = da.isel(
-                nlat=slice(int(rows[0]), int(rows[-1]) + 1),
-                nlon=slice(int(cols[0]), int(cols[-1]) + 1),
-            )
+            nlat_slice = slice(int(rows[0]), int(rows[-1]) + 1)
+            nlon_slice = slice(int(cols[0]), int(cols[-1]) + 1)
+            da = da.isel(nlat=nlat_slice, nlon=nlon_slice)
+            # Attach the matching TLAT/TLONG slices as coordinates
+            tlat_sub  = tlat.isel(nlat=nlat_slice, nlon=nlon_slice)
+            tlong_sub = tlong.isel(nlat=nlat_slice, nlon=nlon_slice)
+            da = da.assign_coords(TLAT=tlat_sub, TLONG=tlong_sub)
 
     return da
 

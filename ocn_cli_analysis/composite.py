@@ -2,23 +2,10 @@ import numpy as np
 import xarray as xr
 
 
-def composite_by_phase(
-    field: xr.DataArray,
-    phase: xr.DataArray,
-) -> dict[str, xr.DataArray]:
-    """Mean of ``field`` for each ENSO phase label.
-
-    Parameters
-    ----------
-    field : xr.DataArray
-        Field with a ``time`` dimension. Must have the same number of time
-        steps as ``phase`` — positional alignment is used.
-    phase : xr.DataArray
-        1-D string labels (``"El Nino"``, ``"La Nina"``, ``"Neutral"``).
-
-    Returns
-    -------
-    dict mapping phase label → mean DataArray (or None if phase absent).
+def composite_by_phase(field: xr.DataArray,
+                       phase: xr.DataArray,) -> dict[str, xr.DataArray]:
+    """
+    Mean of ``field`` for each ENSO phase label.
     """
     field = field.squeeze()
     phase = phase.squeeze()
@@ -55,14 +42,12 @@ def composite_by_phase(
     return composites
 
 
-def composite_difference(
-    field: xr.DataArray,
-    phase: xr.DataArray,
-) -> xr.DataArray | None:
-    """El Niño minus La Niña composite difference.
-
-    Returns None if either phase is absent from the time slice.
+def composite_difference(field: xr.DataArray,
+                         phase: xr.DataArray,) -> xr.DataArray | None:
     """
+    El Niño minus La Niña composite difference.
+    """
+
     comp = composite_by_phase(field, phase)
     if comp["El Nino"] is None or comp["La Nina"] is None:
         print("  [composite_difference] one phase missing — cannot compute difference")
@@ -70,12 +55,13 @@ def composite_difference(
     return (comp["El Nino"] - comp["La Nina"]).rename("ElNino_minus_LaNina")
 
 
-def event_composite(
-    field: xr.DataArray,
-    index: xr.DataArray,
-    threshold: float = 1.0,
-) -> xr.DataArray:
-    """Mean of ``field`` during strong ENSO events (|index| > threshold)."""
+def event_composite(field: xr.DataArray,
+                    index: xr.DataArray,
+                    threshold: float = 1.0,) -> xr.DataArray:
+    """
+    Mean of ``field`` during strong ENSO events (|index| > threshold).
+    """
+    
     index_vals = np.asarray(index).ravel()
     idx = np.where(np.abs(index_vals) > threshold)[0]
     return field.isel(time=idx).mean("time").rename("event_composite")
