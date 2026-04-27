@@ -10,74 +10,89 @@ from loader import _get_dataset, list_variables, compute_anomaly, detrend, stand
 # import composite
 # import lag
 # import enso
+import argparse
 
 
 def main():
-    """
-    1. Compute ocean structure
-    2. Compute climate indices
-    3. Perform lag correlation analysis
-    4. Compute composites
-    5. Display
+    parser = argparse.ArgumentParser(description="Compute Mixed Layer Depth")
 
-    Returns:
-      dict of results
-    """
+    parser.add_argument("--component", type=str, required=True, choices=["atm", "ocn"])
+    parser.add_argument("--scenario", type=str, required=True, choices=["historical", "SSP370"])
+    parser.add_argument("--forcing", type=str, required=True, choices=["cmip6", "smbb"])
 
-# Open lazily — no data downloaded yet
-da = _get_dataset(
-    "TEMP",
-    component="ocn",
-    scenario="historical",
-    forcing="cmip6",
-    time_slice=("1999-01", "2000-12"),
-    lat=slice(5, -5),      # Pacific ENSO
-    lon=slice(-155.0, -120.0),  # negative °W values; converted to 0–360 internally
-    members=0,                  # first ensemble member only
-)
+    parser.add_argument("--time-slice", type=str, nargs=2, required=True)
+    parser.add_argument("--lat-box", type=float, nargs=2, required=True)
+    parser.add_argument("--lon-box", type=float, nargs=2, required=True)
 
-# Data download from URL
-da = da.load()
+    args = parser.parse_args()
 
-# print("OCN - HISTORICAL - CMIP6")
-# print(list_variables("ocn", "historical", "cmip6"))
-# print("OCN - SSP370 - CMIP6")
-# print(list_variables("ocn", "ssp370", "cmip6"))
-# print("OCN - SSP370 - SMBB")
-# print(list_variables("ocn", "ssp370", "smbb"))
-# print("OCN - HISTORICAL - SMBB")
-# print(list_variables("ocn", "historical", "smbb"))
+    # Convert CLI → variables
+    TIME_SLICE = tuple(args.time_slice)
+    LAT_BOX    = tuple(args.lat_box)
+    LON_BOX    = tuple(args.lon_box)
 
-# Spatial mean → time series
-ts = da.mean(["nlat", "nlon"])
+    COMPONENT  = args.component
+    SCENARIO   = args.scenario
+    FORCING    = args.forcing
 
-ts_anom = compute_anomaly(ts.to_dataset(name="TEMP"), "TEMP")
-ts_detrended = detrend(ts.to_dataset(name="TEMP"), "TEMP")
-ts_std = standardize(ts.to_dataset(name="TEMP"), "TEMP")
-ts_smooth = rolling_mean(ts.to_dataset(name="TEMP"), "TEMP", window=3)
+    LAGS  = list(range(-12, 13))
+    ALPHA = 0.05
 
-# --------------------------------------------
-# PLOT
-# --------------------------------------------
-timeseries.plot_timeseries(ts, 
-                           title="CESM2-LE TIMESERIES FUNC TEMP — ENSO box (member 0, historical)", 
-                           xlabel="Depth (cm)", 
-                           ylabel="Time")
+    # ✅ NOW this works because variables exist in scope
+    da = _get_dataset(
+        "TEMP",
+        component=COMPONENT,
+        scenario=SCENARIO,
+        forcing=FORCING,
+        time_slice=TIME_SLICE,
+        lat=slice(*LAT_BOX),
+        lon=slice(*LON_BOX),
+        members=0,
+    )
 
-timeseries.plot_timeseries(ts,
-                           title="Raw SST Timeseries (ENSO box)",
-                           xlabel="Time",
-                           ylabel="Temperature")
 
-timeseries.plot_timeseries(ts_anom,
-                           title="SST Anomaly (ENSO box)",
-                           xlabel="Time",
-                           ylabel="Anomaly")
+    # Data download from URL
+    da = da.load()
 
-timeseries.plot_timeseries(ts_smooth,
-                           title="Smoothed SST (3-month mean)", 
-                           xlabel="Time",
-                           ylabel="Temperature")
+    # print("OCN - HISTORICAL - CMIP6")
+    # print(list_variables("ocn", "historical", "cmip6"))
+    # print("OCN - SSP370 - CMIP6")
+    # print(list_variables("ocn", "ssp370", "cmip6"))
+    # print("OCN - SSP370 - SMBB")
+    # print(list_variables("ocn", "ssp370", "smbb"))
+    # print("OCN - HISTORICAL - SMBB")
+    # print(list_variables("ocn", "historical", "smbb"))
+
+    # Spatial mean → time series
+    ts = da.mean(["nlat", "nlon"])
+
+    ts_anom = compute_anomaly(ts.to_dataset(name="TEMP"), "TEMP")
+    ts_detrended = detrend(ts.to_dataset(name="TEMP"), "TEMP")
+    ts_std = standardize(ts.to_dataset(name="TEMP"), "TEMP")
+    ts_smooth = rolling_mean(ts.to_dataset(name="TEMP"), "TEMP", window=3)
+
+    # --------------------------------------------
+    # PLOT
+    # --------------------------------------------
+    timeseries.plot_timeseries(ts, 
+                            title="CESM2-LE TIMESERIES FUNC TEMP — ENSO box (member 0, historical)", 
+                            xlabel="Depth (cm)", 
+                            ylabel="Time")
+
+    timeseries.plot_timeseries(ts,
+                            title="Raw SST Timeseries (ENSO box)",
+                            xlabel="Time",
+                            ylabel="Temperature")
+
+    timeseries.plot_timeseries(ts_anom,
+                            title="SST Anomaly (ENSO box)",
+                            xlabel="Time",
+                            ylabel="Anomaly")
+
+    timeseries.plot_timeseries(ts_smooth,
+                            title="Smoothed SST (3-month mean)", 
+                            xlabel="Time",
+                            ylabel="Temperature")
 
 if __name__ == "__main__":
     main()
