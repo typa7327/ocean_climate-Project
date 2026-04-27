@@ -99,8 +99,10 @@ def _get_dataset(variable: str,
     # Ensemble member selection
     if members is not None:
         if isinstance(members, int):
-            members = [members]
-        da = da.isel(member_id=members)
+            # Scalar isel drops member_id entirely — no size-1 residual downstream
+            da = da.isel(member_id=members)
+        else:
+            da = da.isel(member_id=members)
 
     # Time selection
     if time_slice is not None:
@@ -291,4 +293,3 @@ def standardize(ds, var):
 
 def rolling_mean(ds, var, window=3):
     return ds[var].rolling(time=window, center=True).mean()
-
