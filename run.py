@@ -8,4 +8,5 @@ being imported (the experiment code is at module level, not in a function).
 After you complete the lab and wrap everything in main(), this file will
 no longer do anything — switch to `pip install -e .` and run `run-lorenz`.
 """
-import ocean_climate.ocean_climate_ensemble
+from ocn_cli_analysis.ocean_climate_ensemble import main
+main()

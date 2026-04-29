@@ -13,3 +13,6 @@ Currently working outputs: Lag Correlation, Correlation Projection, Timeseries
 Future Additions: Indices: AMO, NAO, PDO, etc.
                   Ocean profiles: Salinity, MLD, Heat, Thermocline, Chemical Concentrations, etc.
                   Graphs: Vertical Profiles for all variables (meters, not cm), Composite Maps (phase differences)
+
+https://pypi.org/project/ocean-climate/1.0.0/
+pip install ocean-climate

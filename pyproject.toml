@@ -3,8 +3,8 @@ requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ocean-climate"
-version = "0.5.0"
+name = "ocean-climate-typa7327"
+version = "1.0.0"
 description = "Climate patterns vs ocean profiles analysis and plotting"
 readme = "README.md"
 license = {text = "MIT"}
@@ -21,4 +21,4 @@ dependencies = [
 dev = ["build", "twine"]
 
 [project.scripts]
-run-ocean_climate = "ocean_climate-Project.ocean_climate_ensemble:main"
+run-ocean_climate = "ocean_climate_Project.ocn_cli_analysis.ocean_climate_ensemble:main"
